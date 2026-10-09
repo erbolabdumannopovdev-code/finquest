@@ -28,14 +28,14 @@ FinQuest daromad-xarajat hisoblash, jamg'arma maqsadlari, moliyaviy darslar va t
 ## Vercel'ga joylash
 
 1. GitHub repository'ni Vercel'ga import qiling.
-2. Framework'ni `Other` yoki avtomatik aniqlangan Node.js sozlamasida qoldiring. Root Directory repository ildizi bo'lsin; alohida Build Command kerak emas.
+2. Framework'ni `Other` yoki avtomatik aniqlangan Node.js sozlamasida qoldiring. Root Directory repository ildizi bo'lsin; alohida Build Command kerak emas. API yo'llari `vercel.json` orqali `api/index.js` funksiyasiga yo'naltiriladi.
 3. Vercel'dagi Project → Settings → Environment Variables bo'limida quyidagilarni sozlang:
    - `MONGO_URL` — MongoDB Atlas ulanish manzili; Vercel fayllarni doimiy saqlamagani uchun majburiy.
    - `MONGO_DB` — ixtiyoriy; bo'sh bo'lsa `finquest` ishlatiladi.
    - `JWT_SECRET` — uzun, tasodifiy va maxfiy kalit.
    - `GMAIL_USER`, `GMAIL_APP_PASSWORD` — kirish kodini emailga yuborish uchun.
    - `ADMIN_EMAIL` — zarur bo'lsa administrator akkaunti emaili.
-4. O'zgaruvchilarni Preview va Production muhitlariga qo'shib, qayta deploy qiling.
+4. O'zgaruvchilarni Preview va Production muhitlariga qo'shib, qayta deploy qiling. Har bir yangi GitHub push Production deploy'ni avtomatik boshlashi kerak.
 5. `https://SIZNING-DOMENINGIZ/api/health` manzilini ochib API'ni tekshiring. `MONGO_URL` yo'q bo'lsa, API 503 xato qaytaradi; avval MongoDB'ni sozlang.
 
 Three.js CDN'dan yuklanadi, shu sababli 3D fon uchun internet kerak. CDN yuklanmasa ham asosiy interfeys ochilishi kerak.
