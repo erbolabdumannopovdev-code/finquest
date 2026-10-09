@@ -30,7 +30,8 @@ async function sendCode(email,purpose,pending){
   }catch(e){
     if(codes.get(key)===record)codes.delete(key);
     console.error('Email kodi yuborilmadi:',e.code||e.name||'noma’lum xato');
-    throw new Error('Emailga kod yuborilmadi. Render sozlamalarida GMAIL_USER va GMAIL_APP_PASSWORD ni tekshiring.');
+    const error=new Error('Emailga kod yuborilmadi. Render sozlamalarida GMAIL_USER va GMAIL_APP_PASSWORD ni tekshiring.');
+    error.status=503;error.expose=true;throw error;
   }
 }
 function check(email,code,purpose){
@@ -44,7 +45,7 @@ function check(email,code,purpose){
 const emailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
 const tok=u=>jwt.sign({id:u.id},SECRET,{expiresIn:'30d'});
 const pub=u=>({id:u.id,name:u.name,age:u.age,email:u.email,locale:['uz','ru','en','kk'].includes(u.locale)?u.locale:'uz',points:u.points,lessons:u.lessons||[],level:Math.floor(u.points/50)+1,streak:u.streak||0,telegramLinked:!!u.telegramChatId,admin:!!process.env.ADMIN_EMAIL&&u.email===process.env.ADMIN_EMAIL.trim().toLowerCase()});
-const wrap=f=>(q,s)=>Promise.resolve(f(q,s)).catch(e=>{console.error(e);s.status(500).json({error:'Server xatosi'})});
+const wrap=f=>(q,s)=>Promise.resolve(f(q,s)).catch(e=>{console.error(e);s.status(e.status===503?503:500).json({error:e.expose&&e.status===503?e.message:'Server xatosi'})});
 function auth(q,s,n){
   try{const {id}=jwt.verify((q.headers.authorization||'').slice(7),SECRET);q.user=db.users.find(u=>u.id===id);if(!q.user)throw 0;n()}
   catch{s.status(401).json({error:'Kirish talab qilinadi'})}
