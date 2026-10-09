@@ -25,21 +25,21 @@ FinQuest daromad-xarajat hisoblash, jamg'arma maqsadlari, moliyaviy darslar va t
 
 `USERNAME/REPOSITORY` qismini GitHub foydalanuvchi nomingiz va repository nomiga almashtiring. Maxfiy kalitlar, haqiqiy foydalanuvchi ma'lumotlari va `.env` faylini GitHub'ga hech qachon yubormang.
 
-## Render'ga joylash (tavsiya)
+## Render'ga joylash — MongoDB'siz sinov
 
-Loyiha ildizidagi `render.yaml` Blueprint sozlamasidan foydalanadi. Joylashdan oldin doimiy MongoDB bazasini tayyorlang:
+Render'dagi `render.yaml` sozlamasi MongoDB'siz bepul sinov uchun tayyorlangan:
 
-1. MongoDB Atlas'da cluster va ilova uchun database user yarating. Network Access'da Render'dan ulanishga ruxsat bering; URI ichidagi parolni URL encoding qiling.
-2. GitHub'dagi repository'ni Render dashboard orqali **New → Blueprint** bo'limidan ulang.
-3. Blueprint o'rnatish formasida `MONGO_URL` so'ralganda MongoDB ulanish manzilini kiriting. U maxfiy environment variable sifatida saqlanadi; GitHub'ga kiritmang.
-4. Blueprint'ni yarating. Render `npm ci` bilan paketlarni o'rnatadi, `npm start` bilan serverni ishga tushiradi va `/api/health` manzilini tekshiradi.
-5. Deploy tugagach, `https://SIZNING-SERVICE.onrender.com/api/health` manzilini oching. `{"ok":true,...}` javobi chiqishi kerak.
-6. Email kodi yuborilishi uchun Render service'dagi **Environment** bo'limiga `GMAIL_USER` va `GMAIL_APP_PASSWORD` qo'shib, qayta deploy qiling. Administrator kerak bo'lsa, `ADMIN_EMAIL` ni ham kiriting.
-7. Telegram va Gemini kerak bo'lsa, `TELEGRAM_BOT_TOKEN` va `GEMINI_API_KEY` ni **Environment** bo'limida sozlang. `GEMINI_MODEL` berilmasa `gemini-2.5-flash` ishlatiladi.
+1. GitHub'dagi repository'ni Render dashboard'da **New → Blueprint** orqali ulang va Blueprint'ni yarating.
+2. Render `npm ci` bilan paketlarni o'rnatadi, `npm start` bilan serverni ishga tushiradi; `JWT_SECRET` o'zi yaratiladi.
+3. Deploy tugagach, `https://SIZNING-SERVICE.onrender.com/api/health` manzilini oching. `{"ok":true,...,"store":"file"}` javobi ilova ishlayotganini bildiradi.
 
-Render'ning bepul web service'iga uzoq vaqt so'rov kelmasa, u vaqtincha uxlaydi. Shu sababli keyingi birinchi so'rov sekin javob berishi, polling qiladigan Telegram bot esa vaqtincha to'xtashi mumkin. Bot doim ishlashi kerak bo'lsa, Render'da doim yoqilgan pullik instance yoki alohida worker kerak. Pullik tarif avtomatik tanlanmadi; narx va tarifni Render'da o'zingiz tekshiring.
+MongoDB'siz ilova ishlaydi, lekin ma'lumotlar `data.json` nomli vaqtinchalik faylga yoziladi. Render bepul xizmati qayta ishga tushganda yoki yangi kod joylanganda bu fayl yo'qolishi mumkin; shu sabab akkauntlar, tranzaksiyalar va boshqa yozuvlar saqlanishiga kafolat yo'q. Faqat sinov uchun ishlating, haqiqiy foydalanuvchi ma'lumotlarini kiritmang. Keyin MongoDB ulamoqchi bo'lsangiz, Render'dagi **Environment** bo'limiga `MONGO_URL` qo'shib, qayta joylang.
 
-MongoDB ishlatilsa ham, hozirgi saqlash qatlami ma'lumotlarni jarayon xotirasiga yuklaydi. Bitta Render instance ishlating; bu versiya bir nechta instance'da ishlashga mo'ljallanmagan.
+Email orqali tasdiqlash kodi yuborish uchun Render'dagi **Environment** bo'limiga `GMAIL_USER` va `GMAIL_APP_PASSWORD` qo'shib, qayta joylang. Bu sozlamalarsiz kod server jurnaliga yoziladi, shuning uchun ochiq saytda ro'yxatdan o'tishga yaramaydi. `ADMIN_EMAIL` administrator uchun, `TELEGRAM_BOT_TOKEN` va `GEMINI_API_KEY` esa bot hamda sun'iy intellekt uchun kerak.
+
+Render'ning bepul xizmati bir muddat so'rov olmasa, uxlab qoladi. Shu sabab keyingi birinchi so'rov sekin ishlashi, Telegram bot esa uzilib qolishi mumkin. Botni doim ishlatish uchun doim yoqilgan xizmat yoki alohida ishchi jarayon kerak.
+
+MongoDB ulangan taqdirda ham, hozirgi kod ma'lumotlarni jarayon xotirasiga yuklaydi. Bitta Render nusxasidan foydalaning; bir nechta nusxada ishlash bu versiyada qo'llab-quvvatlanmaydi.
 
 ## Vercel'ga joylash
 

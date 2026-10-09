@@ -7,8 +7,8 @@ app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter
 const store=require('./store'),db=store.db,save=store.save;let SECRET;
 let initPromise;
 function initialize(){
-  if((process.env.VERCEL||process.env.RENDER)&&!process.env.MONGO_URL)throw new Error('Vercel yoki Render’da doimiy ma’lumotlar bazasi kerak: MONGO_URL ni sozlang.');
-  initPromise=initPromise||store.init().then(()=>{SECRET=process.env.JWT_SECRET||db.meta.secret});
+  if(process.env.VERCEL&&!process.env.MONGO_URL)throw new Error('Vercel uchun doimiy ma’lumotlar bazasi kerak: MONGO_URL ni sozlang.');
+  initPromise=initPromise||store.init().then(()=>{SECRET=process.env.JWT_SECRET||db.meta.secret;if(process.env.RENDER&&!process.env.MONGO_URL)console.warn("OGOHLANTIRISH: MongoDB ulanmagan. Ma’lumotlar vaqtinchalik faylda saqlanadi va Render qayta ishga tushganda yo‘qolishi mumkin.")});
   return initPromise;
 }
 app.use('/api',(q,s,n)=>{Promise.resolve().then(initialize).then(()=>n()).catch(e=>{console.error('Ma’lumotlar bazasini ishga tayyorlash xatosi:',e.message);s.status(503).json({error:'Xizmat vaqtincha tayyor emas. Server sozlamalarini tekshiring.'})})});
