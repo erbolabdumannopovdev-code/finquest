@@ -1,22 +1,76 @@
-# FinQuest — Moliyaviy savodxonlik platformasi
-Ishga tushirish: `npm install` → `.env.example` ni `.env` ga nusxalab to'ldiring → `npm start` → http://localhost:3000
-If startup reports that port 3000 is already in use, the app may already be running—open http://localhost:3000 instead of starting a second copy. To run another copy, use `PORT=3001 npm start` in Git Bash, or `$env:PORT=3001; npm start` in PowerShell, then open http://localhost:3001.
-Gmail kodi: Google akkaunt → Xavfsizlik → 2 bosqichli tasdiq → App passwords. `.env` bo'sh bo'lsa kodlar terminalda chiqadi.
-Deploy (Render): Build `npm install`, Start `npm start`, Environment ga `.env` qiymatlarini kiriting.
+# FinQuest — moliyaviy savodxonlik ilovasi
 
-## Ma'lumotlar xotirasi
-- Hammasi saqlanadi: foydalanuvchilar, byudjet yozuvlari, maqsadlar, ball, daraja, streak, darslar, yutuqlar va Telegram akkaunt bog'lanishi. JWT kaliti ham saqlanadi — server qayta ishga tushsa ham hamma tizimda qoladi.
-- `MONGO_URL` bo'lsa MongoDB Atlas (users/tx/goals/meta kolleksiyalari, faqat o'zgargan hujjatlar yoziladi). Bo'lmasa `data.json` (atomik yozish + `.bak` zaxira).
-- Render bepul tarifida fayl tizimi doimiy emas — deployda `MONGO_URL` albatta kiriting.
-- Qo'shimcha API: `GET /api/health`, `PUT /api/me` (ism/yosh), `DELETE /api/me` (akkaunt va ma'lumotlarni o'chirish), `GET /api/admin/stats` (ADMIN_EMAIL uchun).
-- Byudjet yozuvlarini saytda tahrirlash mumkin; API: `PUT /api/tx/:id`.
-- Bosh sahifada joriy oy daromad/xarajat/balansi, 7 kunlik pul oqimi grafigi va eng katta xarajat kategoriyalari ko'rsatiladi. Tranzaksiyalarni matn va turi bo'yicha qidirish/filtrlash mumkin.
-- O'zbekcha, ruscha, inglizcha va qozoqcha interfeys, darslar va test savollari mavjud. Tanlov profil bilan saqlanadi.
-- Telefon va planshetga mos responsive ko'rinish, kichik ekranda ochiladigan menyu va brauzerda saqlanadigan yorug'/qorong'i rang rejimi mavjud. Three.js animatsiyasi kichik ekranlarda yengillashtiriladi.
-- Profil sahifasida ism, yosh va til sozlamalari tahrirlanadi. Kirish tokeni brauzerda saqlanadi va 30 kun amal qiladi.
-- Tasdiqlash kodini ketma-ket so'rash amaldagi kodni qayta ishlatadi; bir xil email va amal uchun yangi kodlar yuborilmaydi. Kod 5 daqiqa amal qiladi va 5 ta xato urinishdan keyin bekor qilinadi.
+FinQuest daromad-xarajat hisoblash, jamg'arma maqsadlari, moliyaviy darslar va testlarni bitta veb-ilovada jamlaydi. Interfeys o'zbek, rus, ingliz va qozoq tillarida ishlaydi; telefon va planshet ekranlariga mos, yorug' va qorong'i rejimlari bor.
 
-## Telegram bot
-@BotFather orqali bot yarating, tokenni `.env` dagi `TELEGRAM_BOT_TOKEN` ga yozing. Server bilan birga ishga tushadi. Saytdagi Telegram kartasidan ulash kodini olib, botga `/link KOD` yuboring; `/account` ulangan profil va ballni ko'rsatadi. `/ai savol` yuboring yoki botga shaxsiy chatda oddiy xabar yozing — Gemini moliyaviy savodxonlik bo'yicha javob beradi. `/forget` shu chatdagi vaqtinchalik AI suhbat xotirasini tozalaydi. Buning uchun Google AI Studio kalitini `.env` dagi `GEMINI_API_KEY` ga kiriting; modelni `GEMINI_MODEL` orqali sozlash mumkin. AI kalitini hech qachon brauzerga yubormang yoki ommaviy repozitoriyga qo'shmang. Boshqa buyruqlar: /tip, /quiz, /scam, /kredit, /omonat.
+## GitHub'ga yuklash
 
-Firibgarlik o'yinidagi ball demo uchun brauzerda hisoblanadi; uni ishlab chiqarishdagi ishonchli natija sifatida ishlatmang.
+1. GitHub'da bo'sh repository yarating.
+2. Ushbu loyiha papkasida Git Bash terminalini oching va quyidagilarni bajaring:
+
+   ```bash
+   git init
+   git add .
+   git status
+   ```
+
+3. `git status` natijasida `.env`, `data.json`, `node_modules` ro'yxatda yo'qligini tekshiring. Ular ko'rinsa, push qilmang; `.gitignore` faylini tekshiring.
+4. Keyin commit yarating va GitHub repository manzilini ulang:
+
+   ```bash
+   git commit -m "Prepare FinQuest for deployment"
+   git branch -M main
+   git remote add origin https://github.com/USERNAME/REPOSITORY.git
+   git push -u origin main
+   ```
+
+`USERNAME/REPOSITORY` qismini GitHub foydalanuvchi nomingiz va repository nomiga almashtiring. Maxfiy kalitlar, haqiqiy foydalanuvchi ma'lumotlari va `.env` faylini GitHub'ga hech qachon yubormang.
+
+## Vercel'ga joylash
+
+1. GitHub repository'ni Vercel'ga import qiling.
+2. Framework'ni `Other` yoki avtomatik aniqlangan Node.js sozlamasida qoldiring. Root Directory repository ildizi bo'lsin; alohida Build Command kerak emas.
+3. Vercel'dagi Project → Settings → Environment Variables bo'limida quyidagilarni sozlang:
+   - `MONGO_URL` — MongoDB Atlas ulanish manzili; Vercel fayllarni doimiy saqlamagani uchun majburiy.
+   - `MONGO_DB` — ixtiyoriy; bo'sh bo'lsa `finquest` ishlatiladi.
+   - `JWT_SECRET` — uzun, tasodifiy va maxfiy kalit.
+   - `GMAIL_USER`, `GMAIL_APP_PASSWORD` — kirish kodini emailga yuborish uchun.
+   - `ADMIN_EMAIL` — zarur bo'lsa administrator akkaunti emaili.
+4. O'zgaruvchilarni Preview va Production muhitlariga qo'shib, qayta deploy qiling.
+5. `https://SIZNING-DOMENINGIZ/api/health` manzilini ochib API'ni tekshiring. `MONGO_URL` yo'q bo'lsa, API 503 xato qaytaradi; avval MongoDB'ni sozlang.
+
+Three.js CDN'dan yuklanadi, shu sababli 3D fon uchun internet kerak. CDN yuklanmasa ham asosiy interfeys ochilishi kerak.
+
+## Vercel'dagi muhim cheklovlar
+
+Vercel serverless muhitida ma'lumotni funksiya RAM'ida saqlab, keyingi so'rovda ham mavjudligiga kafolat berib bo'lmaydi. Tasdiqlash kodi `server.js` ichidagi RAM `Map`'da saqlanadi; kod so'rash va tasdiqlash so'rovlari boshqa serverless nusxalarga tushsa, OTP ishlamay qolishi mumkin. Hozirgi saqlash qatlami ham ma'lumotlarni jarayon xotirasiga yuklab, keyin MongoDB'ga yozadi va bir nechta serverless nusxalar uchun mo'ljallanmagan.
+
+Telegram bot doimiy ishlaydigan long-polling jarayoni. Bu Vercel serverless sozlamasida bot o'z-o'zidan ishga tushmaydi. Gemini Telegram bot ichiga ulangan va alohida, doimiy ishlaydigan bot xizmatini talab qiladi.
+
+Shu sabab Vercel sozlamasi web/API preview uchun; **OTP, ma'lumot yozish va Telegram'ni foydalanuvchilar uchun ishonchli production xizmati deb bo'lmaydi**. To'liq production qilishdan avval OTP'ni umumiy va doimiy xotiraga ko'chirish, MongoDB amallarini har bir serverless so'rovda bevosita hamda atomik bajarish, Telegram botni alohida doimiy worker qilish kerak. Bu ishlar alohida amalga oshirilib tekshirilmaguncha haqiqiy foydalanuvchilar ma'lumotlari bilan ishlatmang.
+
+## Kompyuterda ishga tushirish
+
+```bash
+npm install
+cp .env.example .env
+npm start
+```
+
+Windows PowerShell'da `.env.example` faylini `.env` qilib nusxalang:
+
+```powershell
+Copy-Item .env.example .env
+npm start
+```
+
+`http://localhost:3000` manzilini oching. Gmail sozlanmagan bo'lsa, kirish kodi terminalga chiqariladi (faqat ishlab chiqish vaqtida). `3000` port band bo'lsa, ishlayotgan FinQuest'ni oching yoki boshqa `PORT` tanlang.
+
+## Ilova imkoniyatlari
+
+- Email orqali bir martalik kod bilan kirish; kod 5 daqiqa amal qiladi, 5 marta xato kiritilsa bekor bo'ladi.
+- Profil, til sozlamasi, ball va 30 kunlik JWT sessiyasi.
+- Daromad/xarajat qo'shish, tahrirlash, o'chirish, turi bo'yicha saralash va qidirish; oy hamda so'nggi 7 kun hisoboti.
+- Jamg'arma maqsadlari, kredit/omonat kalkulyatori, kategoriya xarajat limiti va CSV eksporti.
+- Moliyaviy salomatlik bahosi, 5 ta dars, 8 savolli test, reyting va kunlik bonus.
+- Firibgarlikni aniqlash demo o'yini. Ball brauzerdan serverga yuboriladi va soxtalashtirilishi mumkin; musobaqa yoki mukofot uchun ishonchli emas.
+- Telegram ulash va Gemini yordamchisi kodi. `TELEGRAM_BOT_TOKEN` hamda `GEMINI_API_KEY` kerak; Telegram bot Vercel'da ishlamaydi.

@@ -4,8 +4,15 @@ const app=express();app.use(express.json());app.use((q,s,n)=>{s.set({'X-Content-
 const hits=new Map();
 app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter(t=>now-t<6e4);h.push(now);hits.set(q.ip,h);
   h.length>12?s.status(429).json({error:"Juda ko'p urinish, 1 daqiqa kuting"}):n()});
-app.use(express.static(path.join(__dirname,'public')));
 const store=require('./store'),db=store.db,save=store.save;let SECRET;
+let initPromise;
+function initialize(){
+  if(process.env.VERCEL&&!process.env.MONGO_URL)throw new Error('Vercel uchun doimiy ma’lumotlar bazasi kerak: MONGO_URL ni sozlang.');
+  initPromise=initPromise||store.init().then(()=>{SECRET=process.env.JWT_SECRET||db.meta.secret});
+  return initPromise;
+}
+app.use('/api',(q,s,n)=>{Promise.resolve().then(initialize).then(()=>n()).catch(e=>{console.error('Ma’lumotlar bazasini ishga tayyorlash xatosi:',e.message);s.status(503).json({error:'Xizmat vaqtincha tayyor emas. Server sozlamalarini tekshiring.'})})});
+app.use(express.static(path.join(__dirname,'public')));
 const uid=()=>crypto.randomBytes(8).toString('hex');
 const codes=new Map();
 const mail=process.env.GMAIL_USER?nodemailer.createTransport({service:'gmail',auth:{user:process.env.GMAIL_USER,pass:process.env.GMAIL_APP_PASSWORD}}):null;
@@ -229,16 +236,20 @@ app.get('/api/export',auth,(q,s)=>{
   const rows=db.tx.filter(t=>t.uid===q.user.id).map(t=>[new Date(t.date).toISOString().slice(0,10),t.type,t.category.replace(/[",\n]/g,' '),t.amount].join(','));
   s.type('text/csv').send('sana,tur,kategoriya,summa\n'+rows.join('\n'));
 });
-store.init().then(()=>{
-  SECRET=process.env.JWT_SECRET||db.meta.secret;
-  for(const sg of ['SIGINT','SIGTERM'])process.on(sg,async()=>{await store.close();process.exit(0)});
-  const port=Number(process.env.PORT)||3000,server=app.listen(port,()=>{
-    require('./bot')(Q,{link:linkTelegram,account:telegramAccount});
-    console.log('FinQuest: http://localhost:'+port);
-  });
-  server.on('error',e=>{
-    if(e.code==='EADDRINUSE')console.error(`PORT ${port} band байна. FinQuest аль хэдийн ажиллаж байгаа эсэхийг шалгах эсвэл PORT=3001 гэж өөр порт тохируулна уу.`);
-    else console.error('Сервер эхлүүлэхэд алдаа гарлаа:',e.message);
-    process.exit(1);
-  });
-}).catch(e=>{console.error('Ishga tushmadi:',e);process.exit(1)});
+if(require.main===module){
+  initialize().then(()=>{
+    for(const sg of ['SIGINT','SIGTERM'])process.on(sg,async()=>{await store.close();process.exit(0)});
+    const port=Number(process.env.PORT)||3000,server=app.listen(port,()=>{
+      if(process.env.TELEGRAM_BOT_TOKEN)require('./bot')(Q,{link:linkTelegram,account:telegramAccount});
+      else console.log("Telegram bot o'chiq (TELEGRAM_BOT_TOKEN yo'q)");
+      console.log('FinQuest: http://localhost:'+port);
+    });
+    server.on('error',e=>{
+      if(e.code==='EADDRINUSE')console.error(`PORT ${port} band байна. FinQuest аль хэдийн ажиллаж байгаа эсэхийг шалгах эсвэл PORT=3001 гэж өөр порт тохируулна уу.`);
+      else console.error('Сервер эхлүүлэхэд алдаа гарлаа:',e.message);
+      process.exit(1);
+    });
+  }).catch(e=>{console.error('Ishga tushmadi:',e);process.exit(1)});
+}
+
+module.exports=app;
