@@ -7,7 +7,7 @@ app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter
 const store=require('./store'),db=store.db,save=store.save;let SECRET;
 let initPromise;
 function initialize(){
-  if(process.env.VERCEL&&!process.env.MONGO_URL)throw new Error('Vercel uchun doimiy ma’lumotlar bazasi kerak: MONGO_URL ni sozlang.');
+  if((process.env.VERCEL||process.env.RENDER)&&!process.env.MONGO_URL)throw new Error('Vercel yoki Render’da doimiy ma’lumotlar bazasi kerak: MONGO_URL ni sozlang.');
   initPromise=initPromise||store.init().then(()=>{SECRET=process.env.JWT_SECRET||db.meta.secret});
   return initPromise;
 }

@@ -25,6 +25,22 @@ FinQuest daromad-xarajat hisoblash, jamg'arma maqsadlari, moliyaviy darslar va t
 
 `USERNAME/REPOSITORY` qismini GitHub foydalanuvchi nomingiz va repository nomiga almashtiring. Maxfiy kalitlar, haqiqiy foydalanuvchi ma'lumotlari va `.env` faylini GitHub'ga hech qachon yubormang.
 
+## Render'ga joylash (tavsiya)
+
+Loyiha ildizidagi `render.yaml` Blueprint sozlamasidan foydalanadi. Joylashdan oldin doimiy MongoDB bazasini tayyorlang:
+
+1. MongoDB Atlas'da cluster va ilova uchun database user yarating. Network Access'da Render'dan ulanishga ruxsat bering; URI ichidagi parolni URL encoding qiling.
+2. GitHub'dagi repository'ni Render dashboard orqali **New → Blueprint** bo'limidan ulang.
+3. Blueprint o'rnatish formasida `MONGO_URL` so'ralganda MongoDB ulanish manzilini kiriting. U maxfiy environment variable sifatida saqlanadi; GitHub'ga kiritmang.
+4. Blueprint'ni yarating. Render `npm ci` bilan paketlarni o'rnatadi, `npm start` bilan serverni ishga tushiradi va `/api/health` manzilini tekshiradi.
+5. Deploy tugagach, `https://SIZNING-SERVICE.onrender.com/api/health` manzilini oching. `{"ok":true,...}` javobi chiqishi kerak.
+6. Email kodi yuborilishi uchun Render service'dagi **Environment** bo'limiga `GMAIL_USER` va `GMAIL_APP_PASSWORD` qo'shib, qayta deploy qiling. Administrator kerak bo'lsa, `ADMIN_EMAIL` ni ham kiriting.
+7. Telegram va Gemini kerak bo'lsa, `TELEGRAM_BOT_TOKEN` va `GEMINI_API_KEY` ni **Environment** bo'limida sozlang. `GEMINI_MODEL` berilmasa `gemini-2.5-flash` ishlatiladi.
+
+Render'ning bepul web service'iga uzoq vaqt so'rov kelmasa, u vaqtincha uxlaydi. Shu sababli keyingi birinchi so'rov sekin javob berishi, polling qiladigan Telegram bot esa vaqtincha to'xtashi mumkin. Bot doim ishlashi kerak bo'lsa, Render'da doim yoqilgan pullik instance yoki alohida worker kerak. Pullik tarif avtomatik tanlanmadi; narx va tarifni Render'da o'zingiz tekshiring.
+
+MongoDB ishlatilsa ham, hozirgi saqlash qatlami ma'lumotlarni jarayon xotirasiga yuklaydi. Bitta Render instance ishlating; bu versiya bir nechta instance'da ishlashga mo'ljallanmagan.
+
 ## Vercel'ga joylash
 
 1. GitHub repository'ni Vercel'ga import qiling.
