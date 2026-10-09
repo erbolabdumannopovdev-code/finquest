@@ -15,7 +15,7 @@ app.use('/api',(q,s,n)=>{Promise.resolve().then(initialize).then(()=>n()).catch(
 app.use(express.static(path.join(__dirname,'public')));
 const uid=()=>crypto.randomBytes(8).toString('hex');
 const codes=new Map();
-const mail=process.env.GMAIL_USER?nodemailer.createTransport({service:'gmail',auth:{user:process.env.GMAIL_USER,pass:process.env.GMAIL_APP_PASSWORD}}):null;
+const mail=process.env.GMAIL_USER?nodemailer.createTransport({service:'gmail',auth:{user:process.env.GMAIL_USER,pass:process.env.GMAIL_APP_PASSWORD},connectionTimeout:15000,greetingTimeout:15000,socketTimeout:20000}):null;
 async function sendCode(email,purpose,pending){
   const key=`${purpose}:${email}`,active=codes.get(key);
   if(active&&Date.now()<=active.exp){if(purpose==='register')active.pending=pending;return {sent:false}}
@@ -27,7 +27,11 @@ async function sendCode(email,purpose,pending){
     else await mail.sendMail({from:`FinQuest <${process.env.GMAIL_USER}>`,to:email,subject:'FinQuest tasdiqlash kodi',
       html:`<h2>Kodingiz: <b>${code}</b></h2><p>5 daqiqa amal qiladi.</p>`});
     return {sent:true};
-  }catch(e){if(codes.get(key)===record)codes.delete(key);throw e}
+  }catch(e){
+    if(codes.get(key)===record)codes.delete(key);
+    console.error('Email kodi yuborilmadi:',e.code||e.name||'noma’lum xato');
+    throw new Error('Emailga kod yuborilmadi. Render sozlamalarida GMAIL_USER va GMAIL_APP_PASSWORD ni tekshiring.');
+  }
 }
 function check(email,code,purpose){
   const key=`${purpose}:${email}`,c=codes.get(key);
