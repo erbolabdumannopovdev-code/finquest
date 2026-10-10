@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express=require('express'),fs=require('fs'),path=require('path'),jwt=require('jsonwebtoken'),nodemailer=require('nodemailer'),crypto=require('crypto');
-const app=express();app.use(express.json());app.use((q,s,n)=>{s.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'});n()});
+const app=express();app.set('trust proxy',1);app.use(express.json());app.use((q,s,n)=>{s.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'});n()});
 const hits=new Map();
-app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter(t=>now-t<6e4);h.push(now);hits.set(q.ip,h);
+app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter(t=>now-t<6e4);h.push(now);hits.set(q.ip,h);if(hits.size>5000)for(const [k,v] of hits)if(!v.some(t=>now-t<6e4))hits.delete(k);
   h.length>12?s.status(429).json({error:"Juda ko'p urinish, 1 daqiqa kuting"}):n()});
 const store=require('./store'),db=store.db,save=store.save;let SECRET;
 let initPromise;
@@ -250,8 +250,8 @@ if(require.main===module){
       console.log('FinQuest: http://localhost:'+port);
     });
     server.on('error',e=>{
-      if(e.code==='EADDRINUSE')console.error(`PORT ${port} band байна. FinQuest аль хэдийн ажиллаж байгаа эсэхийг шалгах эсвэл PORT=3001 гэж өөр порт тохируулна уу.`);
-      else console.error('Сервер эхлүүлэхэд алдаа гарлаа:',e.message);
+      if(e.code==='EADDRINUSE')console.error(`PORT ${port} band. FinQuest allaqachon ishlayotganini tekshiring yoki boshqa port tanlang (masalan PORT=3001).`);
+      else console.error('Serverni ishga tushirishda xato:',e.message);
       process.exit(1);
     });
   }).catch(e=>{console.error('Ishga tushmadi:',e);process.exit(1)});

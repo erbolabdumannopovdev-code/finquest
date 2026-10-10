@@ -41,6 +41,14 @@ Render'ning bepul xizmati bir muddat so'rov olmasa, uxlab qoladi. Shu sabab keyi
 
 MongoDB ulangan taqdirda ham, hozirgi kod ma'lumotlarni jarayon xotirasiga yuklaydi. Bitta Render nusxasidan foydalaning; bir nechta nusxada ishlash bu versiyada qo'llab-quvvatlanmaydi.
 
+## Render + MongoDB Atlas (ma'lumotlar yo'qolmasligi uchun)
+
+1. MongoDB Atlas'da bepul klaster yarating va **Database Access** bo'limida login/parolli foydalanuvchi qo'shing.
+2. **Network Access → Add IP Address → Allow access from anywhere (0.0.0.0/0)**. Render'ning IP manzili o'zgarib turadi, shuning uchun bu kerak.
+3. **Connect → Drivers** orqali ulanish satrini oling (`mongodb+srv://...`), ichidagi `<password>` ni haqiqiy parolga almashtiring. Parolda maxsus belgilar bo'lsa, ularni URL-kodlang.
+4. Render → Environment bo'limida `MONGO_URL` ga shu satrni kiriting va **Save, rebuild and deploy** qiling.
+5. `/api/health` javobida `\"store\":\"mongodb\"` ko'rinishi kerak.
+
 ## Vercel'ga joylash
 
 1. GitHub repository'ni Vercel'ga import qiling.
