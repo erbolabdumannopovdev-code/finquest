@@ -51,6 +51,7 @@ Render'ning bepul xizmati SMTP portlarini (25, 465, 587) yopgan, shu sabab Gmail
 4. Render → Environment: `BREVO_API_KEY` = kalit, `MAIL_FROM` = tasdiqlangan email.
 5. Xat spam papkasiga tushishi mumkin; birinchi sinovda shu papkani ham tekshiring.
 
+Oddiy sinov uchun `SIMPLE_AUTH=1` yoki SMTP sozlamalari yo'q bo'lganda tasdiqlash kodi avtomatik o‘tkazib yuboriladi va ro'yxatdan o'tish/login darhol ishlaydi. Bu usul SMS/email yuborishni talab qilmaydi.
 
 ## Render + MongoDB Atlas (ma'lumotlar yo'qolmasligi uchun)
 

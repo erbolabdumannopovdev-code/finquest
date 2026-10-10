@@ -22,6 +22,7 @@ const codes=store.codes;
 const mail=process.env.GMAIL_USER?nodemailer.createTransport({service:'gmail',auth:{user:process.env.GMAIL_USER,pass:process.env.GMAIL_APP_PASSWORD},connectionTimeout:15000,greetingTimeout:15000,socketTimeout:20000}):null;
 // Render bepul rejasi SMTP portlarini (25/465/587) yopadi, shuning uchun BREVO_API_KEY bo'lsa xat HTTPS (443) orqali yuboriladi.
 const brevoKey=process.env.BREVO_API_KEY;
+const directAuth=String(process.env.SIMPLE_AUTH||process.env.NO_SMS||process.env.DISABLE_CODE_AUTH||'').toLowerCase()==='1'||String(process.env.SIMPLE_AUTH||process.env.NO_SMS||process.env.DISABLE_CODE_AUTH||'').toLowerCase()==='true';
 async function deliver(email,subject,html){
   if(brevoKey){
     const from=process.env.MAIL_FROM||process.env.GMAIL_USER;
@@ -34,7 +35,14 @@ async function deliver(email,subject,html){
 }
 async function sendCode(email,purpose,pending){
   const key=`${purpose}:${email}`,active=await codes.get(key);
-  if(active&&Date.now()<=active.exp){if(purpose==='register'){active.pending=pending;await codes.set(key,active)}return {sent:false}}
+  if(active&&Date.now()<=active.exp){if(purpose==='register'){active.pending=pending;await codes.set(key,active)}return {sent:false,bypass:!!active.bypass}};
+  if(directAuth||(!brevoKey&&!mail)){
+    const code='000000';
+    const record={code,exp:Date.now()+5*60e3,expAt:new Date(Date.now()+6*60e3),tries:0,purpose,pending:pending||null,bypass:true};
+    await codes.set(key,record);
+    console.log(`[DEV] ${email} kodi avtomatik o'tkazib yuborildi.`);
+    return {sent:false,bypass:true};
+  }
   const code=String(crypto.randomInt(100000,1000000));
   const record={code,exp:Date.now()+5*60e3,expAt:new Date(Date.now()+6*60e3),tries:0,purpose,pending:pending||null};
   await codes.set(key,record);
@@ -54,7 +62,9 @@ async function check(email,code,purpose){
   if(!c)return {error:"Tasdiqlash kodi yuborilmagan yoki muddati tugagan. Yangi kod so'rang.",status:'expired'};
   if(Date.now()>c.exp){await codes.del(key);return {error:"Kod muddati tugadi. Yangi kod so'rang.",status:'expired'}}
   if(c.tries>=5){await codes.del(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}
-  if(c.code!==String(code||'').trim()){c.tries++;if(c.tries>=5){await codes.del(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}await codes.set(key,c);return {error:"Kod noto'g'ri. Emailga kelgan oxirgi kodni tekshiring.",status:'invalid'}}
+  const normalized=String(code||'').trim();
+  const accepted=c.bypass && (normalized===''||normalized==='000000'||normalized===c.code);
+  if(!accepted && c.code!==normalized){c.tries++;if(c.tries>=5){await codes.del(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}await codes.set(key,c);return {error:"Kod noto'g'ri. Emailga kelgan oxirgi kodni tekshiring.",status:'invalid'}}
   await codes.del(key);return {record:c};
 }
 const emailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
@@ -72,7 +82,12 @@ app.post('/api/auth/register',wrap(async(q,s)=>{
   if(name.length<2||!(age>=6&&age<=100)||!emailOk(email))return s.status(400).json({error:"Ma'lumotlar noto'g'ri"});
   if(!['uz','ru','en','kk'].includes(locale))return s.status(400).json({error:'Tanlangan til qo‘llab-quvvatlanmaydi.'});
   if(db.users.some(u=>u.email===email))return s.status(409).json({error:"Bu email ro'yxatdan o'tgan"});
-  const result=await sendCode(email,'register',{name,age,locale});s.json({ok:true,reused:!result.sent});
+  if(directAuth||(!brevoKey&&!mail)){
+    const u={id:uid(),email,name,age,locale:['uz','ru','en','kk'].includes(locale)?locale:'uz',points:0,best:0,created:Date.now()};
+    db.users.push(u);save();
+    return s.json({ok:true,bypass:true,token:tok(u),user:pub(u)});
+  }
+  const result=await sendCode(email,'register',{name,age,locale});s.json({ok:true,reused:!result.sent,bypass:!!result.bypass});
 }));
 app.post('/api/auth/register/verify',wrap(async(q,s)=>{
   const email=String(q.body.email||'').trim().toLowerCase(),result=await check(email,q.body.code,'register');
@@ -83,8 +98,9 @@ app.post('/api/auth/register/verify',wrap(async(q,s)=>{
 }));
 app.post('/api/auth/login',wrap(async(q,s)=>{
   const email=String(q.body.email||'').trim().toLowerCase();if(!emailOk(email))return s.status(400).json({error:'Email manzilini to‘g‘ri kiriting.'});
-  if(!db.users.some(u=>u.email===email))return s.status(404).json({error:"Bu email topilmadi, avval ro'yxatdan o'ting"});
-  const result=await sendCode(email,'login');s.json({ok:true,reused:!result.sent});
+  const u=db.users.find(x=>x.email===email);if(!u)return s.status(404).json({error:"Bu email topilmadi, avval ro'yxatdan o'ting"});
+  if(directAuth||(!brevoKey&&!mail))return s.json({ok:true,bypass:true,token:tok(u),user:pub(u)});
+  const result=await sendCode(email,'login');s.json({ok:true,reused:!result.sent,bypass:!!result.bypass});
 }));
 app.post('/api/auth/login/verify',wrap(async(q,s)=>{
   const email=String(q.body.email||'').trim().toLowerCase(),result=await check(email,q.body.code,'login');
