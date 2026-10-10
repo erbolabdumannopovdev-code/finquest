@@ -1,46 +1,61 @@
 require('dotenv').config();
 const express=require('express'),fs=require('fs'),path=require('path'),jwt=require('jsonwebtoken'),nodemailer=require('nodemailer'),crypto=require('crypto');
-const app=express();app.use(express.json());app.use((q,s,n)=>{s.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'});n()});
+const app=express();app.set('trust proxy',1);app.use(express.json());app.use((q,s,n)=>{s.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'});n()});
 const hits=new Map();
-app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter(t=>now-t<6e4);h.push(now);hits.set(q.ip,h);
+app.use('/api/auth',(q,s,n)=>{const now=Date.now(),h=(hits.get(q.ip)||[]).filter(t=>now-t<6e4);h.push(now);hits.set(q.ip,h);if(hits.size>5000)for(const [k,v] of hits)if(!v.some(t=>now-t<6e4))hits.delete(k);
   h.length>12?s.status(429).json({error:"Juda ko'p urinish, 1 daqiqa kuting"}):n()});
 const store=require('./store'),db=store.db,save=store.save;let SECRET;
 let initPromise;
 function initialize(){
   if(process.env.VERCEL&&!process.env.MONGO_URL)throw new Error('Vercel uchun doimiy ma’lumotlar bazasi kerak: MONGO_URL ni sozlang.');
+  if(process.env.VERCEL&&!process.env.JWT_SECRET)throw new Error('Vercel uchun JWT_SECRET ni sozlang (uzun tasodifiy matn).');
   initPromise=initPromise||store.init().then(()=>{SECRET=process.env.JWT_SECRET||db.meta.secret;if(process.env.RENDER&&!process.env.MONGO_URL)console.warn("OGOHLANTIRISH: MongoDB ulanmagan. Ma’lumotlar vaqtinchalik faylda saqlanadi va Render qayta ishga tushganda yo‘qolishi mumkin.")});
   return initPromise;
 }
-app.use('/api',(q,s,n)=>{Promise.resolve().then(initialize).then(()=>n()).catch(e=>{console.error('Ma’lumotlar bazasini ishga tayyorlash xatosi:',e.message);s.status(503).json({error:'Xizmat vaqtincha tayyor emas. Server sozlamalarini tekshiring.'})})});
+const serverless=!!process.env.VERCEL;
+app.use('/api',(q,s,n)=>{Promise.resolve().then(initialize).then(()=>serverless&&store.refresh()).then(()=>{
+  if(serverless&&q.method!=='GET'&&q.method!=='HEAD'){const end=s.end;s.end=function(...a){store.flush().then(()=>end.apply(s,a));return s}} // Vercel javobdan keyin ishni to'xtatadi: avval saqlaymiz
+  n()}).catch(e=>{console.error('Ma’lumotlar bazasini ishga tayyorlash xatosi:',e.message);s.status(503).json({error:'Xizmat vaqtincha tayyor emas. Server sozlamalarini tekshiring.'})})});
 app.use(express.static(path.join(__dirname,'public')));
 const uid=()=>crypto.randomBytes(8).toString('hex');
-const codes=new Map();
+const codes=store.codes;
 const mail=process.env.GMAIL_USER?nodemailer.createTransport({service:'gmail',auth:{user:process.env.GMAIL_USER,pass:process.env.GMAIL_APP_PASSWORD},connectionTimeout:15000,greetingTimeout:15000,socketTimeout:20000}):null;
+// Render bepul rejasi SMTP portlarini (25/465/587) yopadi, shuning uchun BREVO_API_KEY bo'lsa xat HTTPS (443) orqali yuboriladi.
+const brevoKey=process.env.BREVO_API_KEY;
+async function deliver(email,subject,html){
+  if(brevoKey){
+    const from=process.env.MAIL_FROM||process.env.GMAIL_USER;
+    const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':brevoKey,'content-type':'application/json',accept:'application/json'},
+      body:JSON.stringify({sender:{name:'FinQuest',email:from},to:[{email}],subject,htmlContent:html}),signal:AbortSignal.timeout(15000)});
+    if(!r.ok){const t=await r.text().catch(()=>'');const e=new Error(t.slice(0,300));e.code='BREVO_'+r.status;throw e}
+    return;
+  }
+  await mail.sendMail({from:`FinQuest <${process.env.GMAIL_USER}>`,to:email,subject,html});
+}
 async function sendCode(email,purpose,pending){
-  const key=`${purpose}:${email}`,active=codes.get(key);
-  if(active&&Date.now()<=active.exp){if(purpose==='register')active.pending=pending;return {sent:false}}
+  const key=`${purpose}:${email}`,active=await codes.get(key);
+  if(active&&Date.now()<=active.exp){if(purpose==='register'){active.pending=pending;await codes.set(key,active)}return {sent:false}}
   const code=String(crypto.randomInt(100000,1000000));
-  const record={code,exp:Date.now()+5*60e3,tries:0,purpose,pending};
-  codes.set(key,record);
+  const record={code,exp:Date.now()+5*60e3,expAt:new Date(Date.now()+6*60e3),tries:0,purpose,pending:pending||null};
+  await codes.set(key,record);
   try{
-    if(!mail)console.log(`[DEV] ${email} kodi: ${code}`);
-    else await mail.sendMail({from:`FinQuest <${process.env.GMAIL_USER}>`,to:email,subject:'FinQuest tasdiqlash kodi',
-      html:`<h2>Kodingiz: <b>${code}</b></h2><p>5 daqiqa amal qiladi.</p>`});
+    if(!brevoKey&&!mail)console.log(`[DEV] ${email} kodi: ${code}`);
+    else await deliver(email,'FinQuest tasdiqlash kodi',`<h2>Kodingiz: <b>${code}</b></h2><p>5 daqiqa amal qiladi.</p>`);
     return {sent:true};
   }catch(e){
-    if(codes.get(key)===record)codes.delete(key);
-    console.error('Email kodi yuborilmadi:',e.code||e.name||'noma’lum xato');
-    const error=new Error('Emailga kod yuborilmadi. Render sozlamalarida GMAIL_USER va GMAIL_APP_PASSWORD ni tekshiring.');
+    const cur=await codes.get(key);if(cur&&cur.code===record.code)await codes.del(key);
+    console.error('Email kodi yuborilmadi:',e.code||e.name||'noma’lum xato',brevoKey?e.message:'');
+    const error=new Error('Emailga kod yuborilmadi. Server sozlamalarida BREVO_API_KEY va MAIL_FROM ni (yoki GMAIL_USER va GMAIL_APP_PASSWORD ni) tekshiring.');
     error.status=503;error.expose=true;throw error;
   }
 }
-function check(email,code,purpose){
-  const key=`${purpose}:${email}`,c=codes.get(key);
+async function check(email,code,purpose){
+  const key=`${purpose}:${email}`,c=await codes.get(key);
   if(!c)return {error:"Tasdiqlash kodi yuborilmagan yoki muddati tugagan. Yangi kod so'rang.",status:'expired'};
-  if(Date.now()>c.exp){codes.delete(key);return {error:"Kod muddati tugadi. Yangi kod so'rang.",status:'expired'}}
-  if(c.tries>=5){codes.delete(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}
-  if(c.code!==String(code||'').trim()){c.tries++;if(c.tries>=5){codes.delete(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}return {error:"Kod noto'g'ri. Emailga kelgan oxirgi kodni tekshiring.",status:'invalid'}}
-  codes.delete(key);return {record:c};
+  if(Date.now()>c.exp){await codes.del(key);return {error:"Kod muddati tugadi. Yangi kod so'rang.",status:'expired'}}
+  if(c.tries>=5){await codes.del(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}
+  if(c.code!==String(code||'').trim()){c.tries++;if(c.tries>=5){await codes.del(key);return {error:"Urinishlar tugadi. Yangi kod so'rang.",status:'locked'}}await codes.set(key,c);return {error:"Kod noto'g'ri. Emailga kelgan oxirgi kodni tekshiring.",status:'invalid'}}
+  await codes.del(key);return {record:c};
 }
 const emailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
 const tok=u=>jwt.sign({id:u.id},SECRET,{expiresIn:'30d'});
@@ -59,23 +74,23 @@ app.post('/api/auth/register',wrap(async(q,s)=>{
   if(db.users.some(u=>u.email===email))return s.status(409).json({error:"Bu email ro'yxatdan o'tgan"});
   const result=await sendCode(email,'register',{name,age,locale});s.json({ok:true,reused:!result.sent});
 }));
-app.post('/api/auth/register/verify',(q,s)=>{
-  const email=String(q.body.email||'').trim().toLowerCase(),result=check(email,q.body.code,'register');
+app.post('/api/auth/register/verify',wrap(async(q,s)=>{
+  const email=String(q.body.email||'').trim().toLowerCase(),result=await check(email,q.body.code,'register');
   if(result.error)return s.status(400).json(result);
   if(db.users.some(u=>u.email===email))return s.status(409).json({error:"Bu email ro'yxatdan o'tgan"});
   const u={id:uid(),email,...result.record.pending,locale:result.record.pending.locale||'uz',points:0,best:0,created:Date.now()};db.users.push(u);save();
   s.json({token:tok(u),user:pub(u)});
-});
+}));
 app.post('/api/auth/login',wrap(async(q,s)=>{
   const email=String(q.body.email||'').trim().toLowerCase();if(!emailOk(email))return s.status(400).json({error:'Email manzilini to‘g‘ri kiriting.'});
   if(!db.users.some(u=>u.email===email))return s.status(404).json({error:"Bu email topilmadi, avval ro'yxatdan o'ting"});
   const result=await sendCode(email,'login');s.json({ok:true,reused:!result.sent});
 }));
-app.post('/api/auth/login/verify',(q,s)=>{
-  const email=String(q.body.email||'').trim().toLowerCase(),result=check(email,q.body.code,'login');
+app.post('/api/auth/login/verify',wrap(async(q,s)=>{
+  const email=String(q.body.email||'').trim().toLowerCase(),result=await check(email,q.body.code,'login');
   if(result.error)return s.status(400).json(result);
-  const u=db.users.find(x=>x.email===email);s.json({token:tok(u),user:pub(u)});
-});
+  const u=db.users.find(x=>x.email===email);if(!u)return s.status(404).json({error:"Bu email topilmadi, avval ro'yxatdan o'ting"});s.json({token:tok(u),user:pub(u)});
+}));
 app.get('/api/me',auth,(q,s)=>s.json(pub(q.user)));
 // ---- TRANSACTIONS ----
 app.get('/api/tx',auth,(q,s)=>s.json(db.tx.filter(t=>t.uid===q.user.id).sort((a,b)=>b.date-a.date)));
@@ -250,8 +265,8 @@ if(require.main===module){
       console.log('FinQuest: http://localhost:'+port);
     });
     server.on('error',e=>{
-      if(e.code==='EADDRINUSE')console.error(`PORT ${port} band байна. FinQuest аль хэдийн ажиллаж байгаа эсэхийг шалгах эсвэл PORT=3001 гэж өөр порт тохируулна уу.`);
-      else console.error('Сервер эхлүүлэхэд алдаа гарлаа:',e.message);
+      if(e.code==='EADDRINUSE')console.error(`PORT ${port} band. FinQuest allaqachon ishlayotganini tekshiring yoki boshqa port tanlang (masalan PORT=3001).`);
+      else console.error('Serverni ishga tushirishda xato:',e.message);
       process.exit(1);
     });
   }).catch(e=>{console.error('Ishga tushmadi:',e);process.exit(1)});

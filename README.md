@@ -41,28 +41,45 @@ Render'ning bepul xizmati bir muddat so'rov olmasa, uxlab qoladi. Shu sabab keyi
 
 MongoDB ulangan taqdirda ham, hozirgi kod ma'lumotlarni jarayon xotirasiga yuklaydi. Bitta Render nusxasidan foydalaning; bir nechta nusxada ishlash bu versiyada qo'llab-quvvatlanmaydi.
 
+## Emailga kod yuborish (Render bepul rejasida)
+
+Render'ning bepul xizmati SMTP portlarini (25, 465, 587) yopgan, shu sabab Gmail SMTP u yerda ishlamaydi. HTTPS orqali ishlaydigan Brevo'dan foydalaning:
+
+1. https://brevo.com da bepul akkaunt oching.
+2. **Senders, Domains & Dedicated IPs → Senders → Add a sender** orqali o'z emailingizni qo'shib, xatdagi havola bilan tasdiqlang.
+3. **SMTP & API → API Keys** bo'limida kalit yarating (`xkeysib-...`).
+4. Render → Environment: `BREVO_API_KEY` = kalit, `MAIL_FROM` = tasdiqlangan email.
+5. Xat spam papkasiga tushishi mumkin; birinchi sinovda shu papkani ham tekshiring.
+
+
+## Render + MongoDB Atlas (ma'lumotlar yo'qolmasligi uchun)
+
+1. MongoDB Atlas'da bepul klaster yarating va **Database Access** bo'limida login/parolli foydalanuvchi qo'shing.
+2. **Network Access → Add IP Address → Allow access from anywhere (0.0.0.0/0)**. Render'ning IP manzili o'zgarib turadi, shuning uchun bu kerak.
+3. **Connect → Drivers** orqali ulanish satrini oling (`mongodb+srv://...`), ichidagi `<password>` ni haqiqiy parolga almashtiring. Parolda maxsus belgilar bo'lsa, ularni URL-kodlang.
+4. Render → Environment bo'limida `MONGO_URL` ga shu satrni kiriting va **Save, rebuild and deploy** qiling.
+5. `/api/health` javobida `\"store\":\"mongodb\"` ko'rinishi kerak.
+
 ## Vercel'ga joylash
 
-1. GitHub repository'ni Vercel'ga import qiling.
-2. Framework'ni `Other` yoki avtomatik aniqlangan Node.js sozlamasida qoldiring. Root Directory repository ildizi bo'lsin; alohida Build Command kerak emas. API yo'llari `vercel.json` orqali `api/index.js` funksiyasiga yo'naltiriladi.
-3. Vercel'dagi Project → Settings → Environment Variables bo'limida quyidagilarni sozlang:
-   - `MONGO_URL` — MongoDB Atlas ulanish manzili; Vercel fayllarni doimiy saqlamagani uchun majburiy.
-   - `MONGO_DB` — ixtiyoriy; bo'sh bo'lsa `finquest` ishlatiladi.
-   - `JWT_SECRET` — uzun, tasodifiy va maxfiy kalit.
-   - `GMAIL_USER`, `GMAIL_APP_PASSWORD` — kirish kodini emailga yuborish uchun.
-   - `ADMIN_EMAIL` — zarur bo'lsa administrator akkaunti emaili.
-4. O'zgaruvchilarni Preview va Production muhitlariga qo'shib, qayta deploy qiling. Har bir yangi GitHub push Production deploy'ni avtomatik boshlashi kerak.
-5. `https://SIZNING-DOMENINGIZ/api/health` manzilini ochib API'ni tekshiring. `MONGO_URL` yo'q bo'lsa, API 503 xato qaytaradi; avval MongoDB'ni sozlang.
+1. GitHub repository'ni Vercel'ga import qiling (Framework: `Other`). Root Directory — repository ildizi; Build Command kerak emas. `vercel.json` `public/` papkasini sayt sifatida, `/api/*` yo'llarini esa `api/index.js` funksiyasiga yo'naltiradi.
+2. **Settings → Environment Variables** bo'limida (Production va Preview uchun) quyidagilarni kiriting:
+   - `MONGO_URL` — MongoDB Atlas ulanish satri (majburiy). Atlas → Network Access'da `0.0.0.0/0` ruxsati bo'lsin.
+   - `JWT_SECRET` — uzun tasodifiy matn (majburiy; yo'q bo'lsa API 503 qaytaradi).
+   - `GMAIL_USER`, `GMAIL_APP_PASSWORD` — kod yuborish uchun (Vercel 465/587 portlarini yopmaydi), yoki `BREVO_API_KEY` + `MAIL_FROM`.
+   - `MONGO_DB` (ixtiyoriy), `ADMIN_EMAIL` (ixtiyoriy).
+3. Deploy qiling va `https://SIZNING-DOMENINGIZ/api/health` manzilini oching; javobda `"store":"mongodb"` bo'lishi kerak.
+
+Serverless uchun moslashtirilgan: tasdiqlash kodlari MongoDB'ning `codes` to'plamida saqlanadi (5 daqiqadan keyin o'zi o'chadi), ma'lumotlar har so'rovda bazadan yangilanadi va o'zgarish javob qaytarilishidan oldin yoziladi, shuning uchun bir nechta serverless nusxa bir-biriga xalaqit bermaydi.
+
+Vercel'dagi cheklovlar:
+- Telegram bot (doimiy long-polling) Vercel'da ishlamaydi; bot kerak bo'lsa Render'da ishlating.
+- Har so'rovda ma'lumotlar bazadan qayta o'qiladi, shuning uchun foydalanuvchilar soni juda oshganda sekinlashadi.
+- Bir xil yozuvni bir vaqtda ikki nusxadan o'zgartirsangiz, oxirgi yozuv saqlanadi.
+- Urinishlar limiti (rate limit) har nusxada alohida hisoblanadi.
+- Firibgarlikni aniqlash o'yini balli brauzerdan keladi va soxtalashtirilishi mumkin.
 
 Three.js CDN'dan yuklanadi, shu sababli 3D fon uchun internet kerak. CDN yuklanmasa ham asosiy interfeys ochilishi kerak.
-
-## Vercel'dagi muhim cheklovlar
-
-Vercel serverless muhitida ma'lumotni funksiya RAM'ida saqlab, keyingi so'rovda ham mavjudligiga kafolat berib bo'lmaydi. Tasdiqlash kodi `server.js` ichidagi RAM `Map`'da saqlanadi; kod so'rash va tasdiqlash so'rovlari boshqa serverless nusxalarga tushsa, OTP ishlamay qolishi mumkin. Hozirgi saqlash qatlami ham ma'lumotlarni jarayon xotirasiga yuklab, keyin MongoDB'ga yozadi va bir nechta serverless nusxalar uchun mo'ljallanmagan.
-
-Telegram bot doimiy ishlaydigan long-polling jarayoni. Bu Vercel serverless sozlamasida bot o'z-o'zidan ishga tushmaydi. Gemini Telegram bot ichiga ulangan va alohida, doimiy ishlaydigan bot xizmatini talab qiladi.
-
-Shu sabab Vercel sozlamasi web/API preview uchun; **OTP, ma'lumot yozish va Telegram'ni foydalanuvchilar uchun ishonchli production xizmati deb bo'lmaydi**. To'liq production qilishdan avval OTP'ni umumiy va doimiy xotiraga ko'chirish, MongoDB amallarini har bir serverless so'rovda bevosita hamda atomik bajarish, Telegram botni alohida doimiy worker qilish kerak. Bu ishlar alohida amalga oshirilib tekshirilmaguncha haqiqiy foydalanuvchilar ma'lumotlari bilan ishlatmang.
 
 ## Kompyuterda ishga tushirish
 
