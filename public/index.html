@@ -94,17 +94,48 @@ let T=localStorage.t,U=null,linkCode=null,authBusy=false;const fmt=n=>new Intl.N
 async function api(p,m='GET',b){let r;try{r=await fetch('/api'+p,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+T},body:b?JSON.stringify(b):undefined,signal:AbortSignal.timeout(90000)})}catch(e){if(e.name==='TimeoutError'||e.name==='AbortError')throw new Error('Server 90 soniyada javob bermadi. Render loglari va email sozlamalarini tekshiring.');throw new Error('Serverga ulanib bo‘lmadi. Internet va serverni tekshirib qayta urinib ko‘ring.')}let d;try{d=await r.json()}catch{throw new Error(`Server API ${r.status} xato qaytardi. Render deploy loglarini tekshiring.`)}if(!r.ok){const e=new Error(d.error||'So‘rov bajarilmadi');e.status=r.status;throw e}return d}
 const val=id=>document.getElementById(id).value;
 // ===== Auth =====
-let mode='login',pend='',pendMode='login';
-function authView(step=1){$('#app').innerHTML=`<div class=card style="max-width:480px;margin:8vh auto"><h1>💰 FinQuest</h1><p data-i18n="tagline">Moliyaviy savodxonlikni o'yin bilan o'rganing</p>
-<nav><button class="${mode=='login'?'on':''}" onclick="mode='login';authView()">Kirish</button><button class="${mode=='reg'?'on':''}" onclick="mode='reg';authView()">Ro'yxatdan o'tish</button></nav>
-${step==1?`${mode=='reg'?'<input id=n autocomplete=name maxlength=50 placeholder="Ism"><input id=a type=number min=6 max=100 placeholder="Yosh">':''}<input id=e type=email autocomplete=email placeholder="Gmail manzilingiz"><button id=send-code onclick="sendC()">Kod yuborish</button>`
-:`<p>📧 <b>${esc(pend)}</b> <span data-i18n="sent-code">manziliga tasdiqlash kodi yuborildi</span></p><p data-i18n="one-code">Bitta koddan foydalaning. Kod 5 daqiqa amal qiladi.</p><input id=c inputmode=numeric autocomplete=one-time-code maxlength=6 placeholder="6 xonali kod"><button id=verify-code onclick="verC()">Tasdiqlash</button><button class=g onclick="authView()">Orqaga</button>`}
-<div class=err id=er></div></div>`}
-async function sendC(){if(authBusy)return;const button=$('#send-code'),error=$('#er'),email=val('e').trim(),registering=mode==='reg';authBusy=true;button.disabled=true;button.textContent=trText('Yuborilmoqda…');error.textContent='';const waitTimer=setTimeout(()=>{if(button.isConnected)button.textContent='Server uyg‘onmoqda, kuting…'},12000);
- try{const d=await api(registering?'/auth/register':'/auth/login','POST',registering?{name:val('n'),age:val('a'),email,locale:LANG}:{email});if(d.token){T=d.token;localStorage.t=T;U=d.user;localStorage.lang=d.user.locale||LANG;home();return}pend=email;pendMode=registering?'reg':'login';if(d.bypass){authView(2);return verC(true)};authView(2);if(d.reused)$('#er').textContent=trText('Kod avval yuborilgan — emaildagi shu kodni kiriting.')}catch(x){error.textContent=trText(x.message);button.textContent=trText('Kod yuborish')}finally{clearTimeout(waitTimer);authBusy=false;if(button.isConnected)button.disabled=false}}
-async function verC(forceBypass=false){if(authBusy)return;const button=$('#verify-code'),error=$('#er'),code=forceBypass?'000000':val('c').trim();authBusy=true;if(button)button.disabled=true;error.textContent='';
- try{const d=await api(pendMode=='reg'?'/auth/register/verify':'/auth/login/verify','POST',{email:pend,code});T=d.token;localStorage.t=T;U=d.user;localStorage.lang=d.user.locale||LANG;home()}catch(x){error.textContent=trText(x.message);if($('#c')){$('#c').value='';$('#c').focus()}}finally{authBusy=false;if($('#verify-code'))$('#verify-code').disabled=false}}
-function out(){localStorage.removeItem('t');T=null;authView()}
+let mode='login';
+function authView(){
+  $('#app').innerHTML=`<div class="card" style="max-width:500px;margin:8vh auto;padding:28px 26px;border-radius:26px;background:rgba(12,18,43,.8);box-shadow:0 20px 60px rgba(0,0,0,.22)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#5ef2bf,#8ef7d1);box-shadow:0 0 18px rgba(94,242,191,.9)"></div>
+      <h1 style="margin:0;font-size:2.1rem;letter-spacing:.02em">FinQuest</h1>
+    </div>
+    <p style="margin:18px 0 20px;color:#dfe7ff;font-size:1.2rem;line-height:1.4">Moliyaviy savodxonlikni o'yin bilan o'rganing</p>
+    <nav style="display:flex;gap:10px;margin-bottom:18px">
+      <button class="${mode=='login'?'on':''}" style="flex:1;border-radius:14px;padding:16px 12px" onclick="mode='login';authView()">Kirish</button>
+      <button class="${mode=='reg'?'on':''}" style="flex:1;border-radius:14px;padding:16px 12px" onclick="mode='reg';authView()">Ro'yxatdan o'tish</button>
+    </nav>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${mode=='reg'?`<input id=a type=number min=6 max=100 placeholder="Yoshingiz" style="padding:16px 14px;border-radius:14px">`:''}
+      <input id=name autocomplete=username maxlength=50 placeholder="Ismingiz" style="padding:16px 14px;border-radius:14px">
+      <input id=pass type=password minlength=4 maxlength=50 placeholder="Parol" style="padding:16px 14px;border-radius:14px">
+      <button id=submit-auth onclick="submitAuth()" style="padding:16px 14px;border-radius:14px;margin-top:4px">${mode=='login'?'Kirish':'Ro\'yxatdan o\'tish'}</button>
+    </div>
+    <div class=err id=er style="margin-top:14px"></div>
+  </div>`;
+}
+async function submitAuth(){
+  if(authBusy)return;
+  const button=$('#submit-auth'),error=$('#er');
+  const name=String(val('name')||'').trim();
+  const password=String((document.getElementById('pass')&&document.getElementById('pass').value)||'').trim();
+  const registering=mode==='reg';
+  const age=+val('a');
+  authBusy=true;
+  button.disabled=true;
+  button.textContent=registering?'Ro\'yxatdan o\'tish?':'Kirish?';
+  error.textContent='';
+  try{
+    const payload={name,password};
+    if(registering)payload.age=age;
+    const d=await api(registering?'/auth/register':'/auth/login','POST',registering?{...payload,locale:LANG}:{name,password});
+    T=d.token;localStorage.t=T;U=d.user;localStorage.lang=d.user.locale||LANG;home();
+  }catch(x){
+    error.textContent=trText(x.message);
+    button.textContent=registering?trText("Ro'yxatdan o'tish"):trText('Kirish');
+  }finally{authBusy=false;if(button&&button.isConnected)button.disabled=false}
+}function out(){localStorage.removeItem('t');T=null;authView()}
 async function connectTelegram(){try{const d=await api('/telegram/link','POST',{});if(d.linked){toast('Telegram akkaunti allaqachon ulangan');return}linkCode=d.code;await home()}catch(e){toast(e.message)}}
 async function disconnectTelegram(){try{await api('/telegram/link','DELETE');linkCode=null;await home()}catch(e){toast(e.message)}}
 // ===== Asosiy =====
@@ -223,3 +254,4 @@ function toggleTheme(){localStorage.theme=document.body.dataset.theme==='dark'?'
 document.documentElement.lang=LANG;const tools=document.createElement('div');tools.id='app-tools';const language=document.createElement('select');language.setAttribute('aria-label','App language');language.innerHTML='<option value=uz>🇺🇿 O‘zbekcha</option><option value=ru>🇷🇺 Русский</option><option value=en>🇬🇧 English</option><option value=kk>🇰🇿 Қазақша</option>';language.value=LANG;language.onchange=()=>changeLanguage(language.value);const themeButton=document.createElement('button');themeButton.id='theme-toggle';themeButton.type='button';themeButton.className='g';themeButton.onclick=toggleTheme;themeButton.title='Yorug‘ rejimga o‘tish';themeButton.setAttribute('aria-label','Yorug‘ rejimga o‘tish');tools.append(language,themeButton);document.body.append(tools);applyTheme();
 T?home():authView();
 </script></body></html>
+

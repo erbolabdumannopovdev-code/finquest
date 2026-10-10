@@ -68,6 +68,7 @@ async function check(email,code,purpose){
   await codes.del(key);return {record:c};
 }
 const emailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+const hashPassword=v=>crypto.createHash('sha256').update(String(v||'')).digest('hex');
 const tok=u=>jwt.sign({id:u.id},SECRET,{expiresIn:'30d'});
 const pub=u=>({id:u.id,name:u.name,age:u.age,email:u.email,locale:['uz','ru','en','kk'].includes(u.locale)?u.locale:'uz',points:u.points,lessons:u.lessons||[],level:Math.floor(u.points/50)+1,streak:u.streak||0,telegramLinked:!!u.telegramChatId,admin:!!process.env.ADMIN_EMAIL&&u.email===process.env.ADMIN_EMAIL.trim().toLowerCase()});
 const wrap=f=>(q,s)=>Promise.resolve(f(q,s)).catch(e=>{console.error(e);s.status(e.status===503?503:500).json({error:e.expose&&e.status===503?e.message:'Server xatosi'})});
@@ -77,37 +78,41 @@ function auth(q,s,n){
 }
 // ---- AUTH ----
 app.post('/api/auth/register',wrap(async(q,s)=>{
-  const name=String(q.body.name||'').trim().slice(0,50),age=+q.body.age,email=String(q.body.email||'').trim().toLowerCase();
+  const name=String(q.body.name||'').trim().slice(0,50);
+  const age=Number(q.body.age);
   const locale=String(q.body.locale||'uz');
-  if(name.length<2||!(age>=6&&age<=100)||!emailOk(email))return s.status(400).json({error:"Ma'lumotlar noto'g'ri"});
-  if(!['uz','ru','en','kk'].includes(locale))return s.status(400).json({error:'Tanlangan til qo‘llab-quvvatlanmaydi.'});
-  if(db.users.some(u=>u.email===email))return s.status(409).json({error:"Bu email ro'yxatdan o'tgan"});
-  if(directAuth||(!brevoKey&&!mail)){
-    const u={id:uid(),email,name,age,locale:['uz','ru','en','kk'].includes(locale)?locale:'uz',points:0,best:0,created:Date.now()};
-    db.users.push(u);save();
-    return s.json({ok:true,bypass:true,token:tok(u),user:pub(u)});
-  }
-  const result=await sendCode(email,'register',{name,age,locale});s.json({ok:true,reused:!result.sent,bypass:!!result.bypass});
+  const password=String(q.body.password||q.body.pass||'').trim();
+  if(name.length<2||!(age>=6&&age<=100)||password.length<4)return s.status(400).json({error:"Ism, yosh va parol to'g'ri kiriting."});
+  if(!['uz','ru','en','kk'].includes(locale))return s.status(400).json({error:'Tanlangan til qo\'llab-quvvatlanmaydi.'});
+  const uniqueName=name.toLowerCase();
+  if(db.users.some(u=>String(u.name||'').trim().toLowerCase()===uniqueName))return s.status(409).json({error:"Bu ism allaqachon ro'yxatdan o'tgan"});
+  const u={id:uid(),name,age,locale:['uz','ru','en','kk'].includes(locale)?locale:'uz',passwordHash:hashPassword(password),email:`${uid()}@local`,points:0,best:0,created:Date.now()};
+  db.users.push(u);save();
+  s.json({ok:true,token:tok(u),user:pub(u)});
 }));
 app.post('/api/auth/register/verify',wrap(async(q,s)=>{
-  const email=String(q.body.email||'').trim().toLowerCase(),result=await check(email,q.body.code,'register');
-  if(result.error)return s.status(400).json(result);
-  if(db.users.some(u=>u.email===email))return s.status(409).json({error:"Bu email ro'yxatdan o'tgan"});
-  const u={id:uid(),email,...result.record.pending,locale:result.record.pending.locale||'uz',points:0,best:0,created:Date.now()};db.users.push(u);save();
+  const name=String(q.body.name||'').trim();
+  const age=Number(q.body.age);
+  const password=String(q.body.password||q.body.pass||'').trim();
+  const u=db.users.find(x=>String(x.name||'').trim().toLowerCase()===name.toLowerCase());
+  if(!u)return s.status(404).json({error:"Bunday foydalanuvchi topilmadi"});
+  if(u.passwordHash!==hashPassword(password))return s.status(401).json({error:'Parol noto\'g\'ri'});
   s.json({token:tok(u),user:pub(u)});
 }));
 app.post('/api/auth/login',wrap(async(q,s)=>{
-  const email=String(q.body.email||'').trim().toLowerCase();if(!emailOk(email))return s.status(400).json({error:'Email manzilini to‘g‘ri kiriting.'});
-  const u=db.users.find(x=>x.email===email);if(!u)return s.status(404).json({error:"Bu email topilmadi, avval ro'yxatdan o'ting"});
-  if(directAuth||(!brevoKey&&!mail))return s.json({ok:true,bypass:true,token:tok(u),user:pub(u)});
-  const result=await sendCode(email,'login');s.json({ok:true,reused:!result.sent,bypass:!!result.bypass});
+  const name=String(q.body.name||'').trim();
+  const password=String(q.body.password||q.body.pass||'').trim();
+  const u=db.users.find(x=>String(x.name||'').trim().toLowerCase()===name.toLowerCase()&&x.passwordHash===hashPassword(password));
+  if(!u)return s.status(401).json({error:'Ism yoki parol noto\'g\'ri.'});
+  s.json({ok:true,token:tok(u),user:pub(u)});
 }));
 app.post('/api/auth/login/verify',wrap(async(q,s)=>{
-  const email=String(q.body.email||'').trim().toLowerCase(),result=await check(email,q.body.code,'login');
-  if(result.error)return s.status(400).json(result);
-  const u=db.users.find(x=>x.email===email);if(!u)return s.status(404).json({error:"Bu email topilmadi, avval ro'yxatdan o'ting"});s.json({token:tok(u),user:pub(u)});
-}));
-app.get('/api/me',auth,(q,s)=>s.json(pub(q.user)));
+  const name=String(q.body.name||'').trim();
+  const password=String(q.body.password||q.body.pass||'').trim();
+  const u=db.users.find(x=>String(x.name||'').trim().toLowerCase()===name.toLowerCase());
+  if(!u||u.passwordHash!==hashPassword(password))return s.status(401).json({error:'Ism yoki parol noto\'g\'ri.'});
+  s.json({token:tok(u),user:pub(u)});
+}));app.get('/api/me',auth,(q,s)=>s.json(pub(q.user)));
 // ---- TRANSACTIONS ----
 app.get('/api/tx',auth,(q,s)=>s.json(db.tx.filter(t=>t.uid===q.user.id).sort((a,b)=>b.date-a.date)));
 app.post('/api/tx',auth,(q,s)=>{

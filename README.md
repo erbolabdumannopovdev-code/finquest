@@ -41,17 +41,13 @@ Render'ning bepul xizmati bir muddat so'rov olmasa, uxlab qoladi. Shu sabab keyi
 
 MongoDB ulangan taqdirda ham, hozirgi kod ma'lumotlarni jarayon xotirasiga yuklaydi. Bitta Render nusxasidan foydalaning; bir nechta nusxada ishlash bu versiyada qo'llab-quvvatlanmaydi.
 
-## Emailga kod yuborish (Render bepul rejasida)
+## Oddiy autentifikatsiya (email/SMS yo'q)
 
-Render'ning bepul xizmati SMTP portlarini (25, 465, 587) yopgan, shu sabab Gmail SMTP u yerda ishlamaydi. HTTPS orqali ishlaydigan Brevo'dan foydalaning:
+Ilova endi faqat ism + yosh + parol bilan ro'yxatdan o'tadi. Kirishda ism va parol kiritiladi. Kodlar, SMS va email tasdiqlash ishlatilmaydi.
 
-1. https://brevo.com da bepul akkaunt oching.
-2. **Senders, Domains & Dedicated IPs → Senders → Add a sender** orqali o'z emailingizni qo'shib, xatdagi havola bilan tasdiqlang.
-3. **SMTP & API → API Keys** bo'limida kalit yarating (`xkeysib-...`).
-4. Render → Environment: `BREVO_API_KEY` = kalit, `MAIL_FROM` = tasdiqlangan email.
-5. Xat spam papkasiga tushishi mumkin; birinchi sinovda shu papkani ham tekshiring.
-
-Oddiy sinov uchun `SIMPLE_AUTH=1` yoki SMTP sozlamalari yo'q bo'lganda tasdiqlash kodi avtomatik o‘tkazib yuboriladi va ro'yxatdan o'tish/login darhol ishlaydi. Bu usul SMS/email yuborishni talab qilmaydi.
+- Ro'yxatdan o'tish: `name`, `age`, `password`
+- Kirish: `name`, `password`
+- Parollar serverda xesh ko'rinishida saqlanadi.
 
 ## Render + MongoDB Atlas (ma'lumotlar yo'qolmasligi uchun)
 
